@@ -33,30 +33,18 @@ class Level {
             // map over the content in each row
             return row.map((ch, x) => { // x tells us the x coord
                 // map background elements to strings, actor chars to classes
-                let type = levelChars[ch]; 
+                let type = levelChars[ch];
                 // if string, return it
                 if (typeof type === "string") return type;
-                // if actor 
+                // otherwise it's an actor, put it in the startActors array
                 this.startActors.push(
-                    // Position of actor stored as Vec object
-                    type.create(new Vec(x, y), ch) // static create method "create"
+                    // Dynamically create each actor 
+                    type.create(new Vec(x, y), ch) 
                 );
             });
         });
     }
 }
-
-// Maps plan characters to either background grid types or actor classes
-const levelChars = {
-    ".": "empty", 
-    "#": "wall", 
-    "+": "lava",
-    "@": Player, 
-    "o": Coin,
-    "=": Lava, 
-    "|": Lava, 
-    "v": Lava
-  };
 
 // Actors will change places as game goes on. 
 // Tracks the state of the running game
@@ -82,7 +70,7 @@ class State {
 // pos = x, y and size = actor's size
 class Vec {
     constructor(x, y) {
-        this.x = x; 
+        this.x = x;
         this.y = y;
     }
 
@@ -116,3 +104,65 @@ class Player {
 }
 // Size property is always the same
 Player.prototype.size = new Vec(0.8, 1.5);
+
+// Lava actor has create metod that looks at the character the Level
+// constructor passes and creates the appropriate lava actor
+class Lava {
+    constructor(pos, speed, reset) {
+        this.pos = pos;
+        this.speed = speed;
+        this.reset = reset;
+    }
+
+    get type() { return "Lava"; }
+
+    static create(pos, ch) {
+        // for static lava
+        if (ch === "=") {
+            return new Lava(pos, new Vec(2, 0));
+            // bouncing lava
+        } else if (ch === "|") {
+            return new Lava(pos, new Vec(0, 2));
+            // dripping lava ( has reset property )
+        } else if (ch === "v") {
+            return new Lava(pos, new Vec(0, 3), pos);
+        }
+    }
+}
+Lava.prototype.size = new Vec(1, 1);
+
+// Coin Actors: Stationary, but have a "wobble". Stores a base psotion and a 
+// wobble property to track the phase of the bouncing motion
+class Coin {
+    constructor(pos, basePos, wobble) {
+        this.pos = pos;
+        this.basePos = basePos;
+        this.wobble = wobble;
+    }
+
+    get type() { return "coin"; }
+
+    // pos arg will be a new Vec(x, y)
+    static create(pos) {
+        let basePos = pos.plus(new Vec(0.2, 0.1));
+        // width of a wobble phase is 2 * PI. Multiply that by Math.random to give it..
+        // ..a random starting position
+        return new Coin(basePos, basePos, Math.random() * Math.PI * 2);
+    }
+}
+Coin.prototype.size = new Vec(0.6, 0.6);
+
+// Maps plan characters to either background grid types or actor classes
+const levelChars = {
+    ".": "empty",
+    "#": "wall",
+    "+": "lava",
+    "@": Player,
+    "o": Coin,
+    "=": Lava,
+    "|": Lava,
+    "v": Lava
+};
+
+let simpleLevel = new Level(simpleLevelPlan);
+console.log(`${simpleLevel.width} by ${simpleLevel.height}`); //--> 22 by 9
