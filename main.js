@@ -34,7 +34,7 @@ class Level {
             return row.map((ch, x) => { // x tells us the x coord
                 // map background elements to strings, actor chars to classes
                 let type = levelChars[ch];
-                // if string, return it
+                // if string, it's a background element, so return the type
                 if (typeof type === "string") return type;
                 // otherwise it's an actor, put it in the startActors array
                 this.startActors.push(
@@ -52,7 +52,7 @@ class State {
     constructor(level, actors, status) {
         this.level = level;
         this.actors = actors;
-        this.status = status; // "playing", "lsot", or "won"
+        this.status = status; // "playing", "lost", or "won"
     }
 
     static start(level) {
@@ -164,5 +164,110 @@ const levelChars = {
     "v": Lava
 };
 
+
+
+// Drawing subsystem will be encapsulated. Put it behind an interface.
+
+//Helper function provides a way to create an element and give it some attributes/child nodes
+function elt(name, attrs, ...children) {
+    // Create an element of "name"
+    let dom = document.createElement(name);
+    for (let attr of Object.keys(attrs)) {
+        // Set some attributes
+        dom.setAttribute(attr, attrs[attr]); // makes attribute class: "game"
+    }
+    // Append the children into the created element
+    for (let child of children) {
+        dom.appendChild(child);
+    }
+    return dom;
+}
+
+// Encapsulation of drawing code: done by defining a display object:
+// This displays a given level and state
+class DOMDisplay {
+    constructor(parent, level) {
+        this.dom = elt("div", {class: "game"}, drawGrid(level));
+        // actorLayer used to track element that holds the actors
+        this.actorLayer = null;
+        parent.appendChild(this.dom);
+    }
+    clear() { this.dom.remove(); }
+}
+
+// Number of pixels per square unit is 20
+const scale = 20;
+
+// Background drawn as a table element
+// Each row of grid turned into <tr>
+// Strings in grid used as classNames for <td>s
+function drawGrid(level) {
+    // a table
+    return elt("table", 
+    // with these attributes
+    {
+        class: "background",
+        style: `width: ${level.width * scale}px`
+    }, 
+    // and these children
+     ...level.rows.map(row =>
+        elt("tr", {style: `height: ${scale}px`},
+            ...row.map(type => elt("td", {class: type})))
+    ));
+}
+
+// Drawing each actor: Create dom element for it
+// Set elements positiona and size  based on actor's properties
+function drawActors(actors) {
+    return elt("div", {}, ...actors.map(actor => {
+        let rect = elt("div", {class: `actor ${actor.type}`});
+        rect.style.width = `${actor.size.x * scale}px`;
+        rect.style.height = `${actor.size.y * scale}px`;
+        rect.style.left = `${actor.pos.x * scale}px`;
+        rect.style.top = `${actor.pos.y * scale}px`;
+        return rect;
+    }));
+}
+
+// syncState method: make display show a given state
+DOMDisplay.prototype.syncState = function(state) {
+  if (this.actorLayer) this.actorLayer.remove();
+  this.actorLayer = drawActors(state.actors);
+  this.dom.appendChild(this.actorLayer);
+  this.dom.className = `game ${state.status}`;
+  this.scrollPlayerIntoView(state);
+};
+
+// Find players position, update the wrapping element's scroll position
+// Use scrollLeft and scrollTop properties when player is too close to edge
+DOMDisplay.prototype.scrollPlayerIntoView = function(state) {
+    let width = this.dom.clientWidth;
+    let height = this.dom.clientHeight;
+    let margin = width / 3;  // 1/3 of the width
+
+    // The viewport
+    let left = this.dom.scrollLeft, right = left + width;
+    let top = this.dom.scrollTop, bottom = top + height;
+
+    let player = state.player;
+    // find actor's center: it's position + half its size * 20px
+    let center = player.pos.plus(player.size.times(0.5))
+        .times(scale);
+
+    // verify the player's position isn't outside allowed range
+    if (center.x < left + margin) {
+        this.dom.scrollLeft = center.x = margin;
+    } else if (center.x > right - margin) {
+        this.dom.scrollLeft = center.x + margin - width;
+    }
+
+    if (center.y < top + margin) {
+        this.dom.scrollTop = center.y - margin;
+    } else if (center.y > bottom - margin) {
+        this.dom.scrollTop = center.y + margin - height;
+    }
+};
+
 let simpleLevel = new Level(simpleLevelPlan);
-console.log(`${simpleLevel.width} by ${simpleLevel.height}`); //--> 22 by 9
+let display = new DOMDisplay(document.body, simpleLevel);
+display.syncState(State.start(simpleLevel));
